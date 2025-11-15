@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Senaman Otot Tracker</title>
+<link rel="manifest" href="manifest.json">
+<style>
+body { font-family: Arial; margin: 20px; background: #f0f0f0; }
+h1,h2,h3 { margin: 10px 0; }
+.section { background: #fff; padding: 15px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 0 5px #ccc; }
+.itemBox { background: #f9f9f9; padding: 10px; border-radius: 8px; margin-bottom: 10px; }
+.row { display: flex; gap: 10px; margin-bottom: 5px; flex-wrap: wrap; align-items:center; }
+input[type="text"], input[type="number"], select, textarea { padding: 5px; font-size: 14px; flex: 1; min-width:120px; }
+textarea { min-height:60px; flex-basis:100%; }
+button { padding: 5px 10px; border-radius:5px; background:#4caf50; color:white; border:none; cursor:pointer; }
+button.delete { background:red; }
+.warning { color:red; font-weight:bold; margin-top:5px; }
+#jsonButtons { margin-bottom:20px; }
+.indent { margin-left:20px; }
+</style>
+</head>
+<body>
+
+<h1>Senaman Otot Tracker (PWA)</h1>
+
+<div id="jsonButtons">
+    <button onclick="exportJSON()">💾 Export JSON</button>
+    <input type="file" id="importFile" style="display:none" onchange="importJSON(event)">
+    <button onclick="document.getElementById('importFile').click()">📂 Import JSON</button>
+</div>
+
+<div id="muscleSections" class="section"></div>
+
+<script>
+// ===== DATA =====
+let data = JSON.parse(localStorage.getItem("workoutApp")) || {
+    muscles: { headFace: [], upper: [], middle: [], lower: [] }
+};
+
+// ===== SAVE =====
+function save(){ localStorage.setItem("workoutApp", JSON.stringify(data)); }
+
+// ===== IMPORT / EXPORT =====
+function exportJSON(){
+    const blob = new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download="senaman_otot.json"; a.click();
+    URL.revokeObjectURL(url);
+}
+function importJSON(event){
+    const file = event.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = e=>{
+        try{
+            const imported = JSON.parse(e.target.result);
+            data = imported;
+            save();
+            renderMuscles();
+            alert("Import berjaya!");
+        }catch(err){ alert("Fail JSON tidak sah!"); }
+    };
+    reader.readAsText(file);
+    event.target.value="";
+}
+
+// ===== RENDER =====
+function renderMuscles(){
+    const sections = { headFace:"Head & Face", upper:"Upper Body", middle:"Middle Body", lower:"Lower Body" };
+    const container = document.getElementById("muscleSections");
+    container.innerHTML="";
+
+    for(let key in sections){
+        const secDiv = document.createElement("div"); secDiv.className="section";
+        const h2 = document.createElement("h2"); h2.textContent=sections[key]; secDiv.appendChild(h2);
+
+        const listDiv = document.createElement("div"); listDiv.id=key+"List"; secDiv.appendChild(listDiv);
+        const addBtn = document.createElement("button"); addBtn.textContent="+ Tambah Otot"; addBtn.onclick=()=>{ addMuscle(key); };
+        secDiv.appendChild(addBtn);
+        container.appendChild(secDiv);
+
+        const list = document.getElementById(key+"List");
+        list.innerHTML="";
+        data.muscles[key].forEach((muscle,i)=>{
+            const muscleDiv = document.createElement("div"); muscleDiv.className="itemBox";
+
+            const rowMuscle = document.createElement("div"); rowMuscle.className="row";
+            const inpMuscle = document.createElement("input"); inpMuscle.type='text'; inpMuscle.placeholder='Nama Otot'; inpMuscle.value=muscle.nama||''; inpMuscle.oninput=e=>{ muscle.nama=e.target.value; save(); };
+            const delMuscle = document.createElement("button"); delMuscle.className='delete'; delMuscle.textContent='X'; delMuscle.onclick=()=>{ data.muscles[key].splice(i,1); save(); renderMuscles(); };
+            rowMuscle.append(inpMuscle,delMuscle);
+            muscleDiv.appendChild(rowMuscle);
+
+            // Button tambah senaman
+            const addExBtn = document.createElement("button"); addExBtn.textContent="+ Tambah Senaman"; addExBtn.onclick=()=>{ addExercise(key,i); };
+            muscleDiv.appendChild(addExBtn);
+
+            // List senaman
+            const exListDiv = document.createElement("div"); exListDiv.className="indent"; muscleDiv.appendChild(exListDiv);
+            muscle.exercises?.forEach((item,j)=>{
+                const div = document.createElement("div"); div.className="itemBox indent";
+                
+                // Nama
+                const row1 = document.createElement("div"); row1.className="row";
+                const inpName = document.createElement("input"); inpName.type='text'; inpName.placeholder='Nama Senaman'; inpName.value=item.nama||''; inpName.oninput=e=>{ item.nama=e.target.value; save(); };
+                row1.appendChild(inpName);
+
+                // Nota
+                const row2 = document.createElement("div"); row2.className="row";
+                const txtNote = document.createElement("textarea"); txtNote.placeholder='Nota / Tips / Form'; txtNote.value=item.note||''; txtNote.oninput=e=>{ item.note=e.target.value; save(); };
+                row2.appendChild(txtNote);
+
+                // Rep / Set / Berat / Kategori
+                const row3 = document.createElement("div"); row3.className="row";
+                const catSelect = document.createElement("select");
+                ["Kardio & Stamina","Isometric","Strength"].forEach(c=>{ const opt=document.createElement("option"); opt.value=c; opt.text=c; if(item.category===c) opt.selected=true; catSelect.appendChild(opt); });
+                catSelect.onchange=e=>{ item.category=e.target.value; save(); };
+                const inpRep = document.createElement("input"); inpRep.type='number'; inpRep.placeholder='Repitisi'; inpRep.value=item.rep||''; inpRep.oninput=e=>{ item.rep=e.target.value; save(); };
+                const inpSet = document.createElement("input"); inpSet.type='number'; inpSet.placeholder='Set'; inpSet.value=item.set||''; inpSet.oninput=e=>{ item.set=e.target.value; save(); };
+                const inpWeight = document.createElement("input"); inpWeight.type='number'; inpWeight.placeholder='Berat (kg)'; inpWeight.value=item.weight||''; inpWeight.oninput=e=>{ item.weight=e.target.value; save(); };
+                row3.append(catSelect,inpRep,inpSet,inpWeight);
+
+                // Tick
+                const row4 = document.createElement("div"); row4.className="row";
+                const chkDone = document.createElement("input"); chkDone.type='checkbox'; chkDone.checked=item.done||false; chkDone.onchange=e=>{ item.done=e.target.checked; save(); renderMuscles(); };
+                const labelDone = document.createElement("label"); labelDone.appendChild(chkDone); labelDone.append("Sudah Buat");
+                const chkRepeat = document.createElement("input"); chkRepeat.type='checkbox'; chkRepeat.checked=item.repeat||false; chkRepeat.onchange=e=>{ item.repeat=e.target.checked; save(); renderMuscles(); };
+                const labelRepeat = document.createElement("label"); labelRepeat.appendChild(chkRepeat); labelRepeat.append("Perlu Ulang / Belum Buat");
+                const delBtn = document.createElement("button"); delBtn.className='delete'; delBtn.textContent='X'; delBtn.onclick=()=>{ muscle.exercises.splice(j,1); save(); renderMuscles(); };
+                row4.append(labelDone,labelRepeat,delBtn);
+
+                div.append(row1,row2,row3,row4);
+                if(item.repeat){ const warn = document.createElement('div'); warn.className='warning'; warn.textContent="Senaman perlu ulang / belum buat!"; div.appendChild(warn); }
+
+                exListDiv.appendChild(div);
+            });
+
+            list.appendChild(muscleDiv);
+        });
+    }
+}
+
+// ===== ADD MUSCLE =====
+function addMuscle(section){ data.muscles[section].push({nama:'',exercises:[]}); save(); renderMuscles(); }
+
+// ===== ADD EXERCISE =====
+function addExercise(section, muscleIndex){
+    const muscle = data.muscles[section][muscleIndex];
+    if(!muscle.exercises) muscle.exercises=[];
+    muscle.exercises.push({nama:'',note:'',rep:'',set:'',weight:'',done:false,repeat:false,category:"Kardio & Stamina"});
+    save(); renderMuscles();
+}
+
+// ===== INIT =====
+renderMuscles();
+
+// ===== PWA SERVICE WORKER =====
+if('serviceWorker' in navigator){
+    window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').then(()=>console.log('SW registered')).catch(err=>console.log(err)); });
+}
+</script>
+
+</body>
+</html>
